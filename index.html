@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hyrox Crew Schedule</title>
+<style>
+  :root { --bg:#111; --card:#1c1c1c; --accent:#ffd400; --text:#f2f2f2; --muted:#999; --danger:#ff5252; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--text); }
+  header { background:var(--accent); color:#000; padding:1.5rem 1rem; text-align:center; }
+  header h1 { margin:0; letter-spacing:2px; text-transform:uppercase; }
+  header p { margin:.3rem 0 0; }
+  main { max-width:900px; margin:auto; padding:1rem; }
+  form { background:var(--card); padding:1rem; border-radius:10px; display:grid; gap:.75rem;
+         grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); }
+  label { display:flex; flex-direction:column; font-size:.8rem; color:var(--muted); gap:.25rem; }
+  input { padding:.6rem; border-radius:6px; border:1px solid #333; background:#111; color:var(--text); font-size:1rem; }
+  button { padding:.6rem 1rem; border:0; border-radius:6px; cursor:pointer; font-weight:700; }
+  .add { background:var(--accent); align-self:end; }
+  h2 { margin:1.5rem 0 .5rem; }
+  .toolbar { display:flex; gap:.5rem; flex-wrap:wrap; }
+  .toolbar input { flex:1; min-width:160px; }
+  table { width:100%; border-collapse:collapse; margin-top:.5rem; background:var(--card); border-radius:10px; overflow:hidden; }
+  th,td { padding:.7rem; text-align:left; border-bottom:1px solid #2a2a2a; }
+  th { color:var(--accent); font-size:.8rem; text-transform:uppercase; }
+  tr.past td { opacity:.45; }
+  .del { background:transparent; color:var(--danger); }
+  .empty { text-align:center; color:var(--muted); padding:2rem; }
+  @media (max-width:600px) {
+    thead { display:none; }
+    tr { display:block; padding:.5rem; border-bottom:1px solid #333; }
+    td { display:flex; justify-content:space-between; border:0; padding:.25rem .5rem; }
+    td::before { content:attr(data-label); color:var(--muted); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏋️ Hyrox Crew Schedule</h1>
+  <p>Who's racing, when, and which race</p>
+</header>
+<main>
+  <form id="form">
+    <label>Name <input id="name" required maxlength="40" placeholder="e.g. Alex"></label>
+    <label>Race name <input id="race" required maxlength="80" placeholder="e.g. Hyrox London"></label>
+    <label>Date <input id="date" type="date" required></label>
+    <label>Time <input id="time" type="time" required></label>
+    <button class="add" type="submit">Add entry</button>
+  </form>
+
+  <h2>Schedule</h2>
+  <p id="status" style="color:var(--danger)"></p>
+  <div class="toolbar"><input id="search" type="search" placeholder="Filter by name or race…"></div>
+  <table>
+    <thead><tr><th>Name</th><th>Race</th><th>Date</th><th>Time</th><th></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// Paste your Firebase web app config here (Firebase console > Project settings > Your apps)
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  appId: "YOUR_APP_ID"
+};
+
+const $ = id => document.getElementById(id);
+const configured = firebaseConfig.apiKey !== "YOUR_API_KEY";
+let entries = [];
+let col;
+
+if (configured) {
+  col = collection(getFirestore(initializeApp(firebaseConfig)), "races");
+  onSnapshot(col, snap => {
+    entries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    render();
+  }, err => { $('status').textContent = 'Database error: ' + err.message; });
+} else {
+  $('status').textContent = 'Firebase is not configured yet - see README.md.';
+}
+
+function render() {
+  const q = $('search').value.trim().toLowerCase();
+  const now = new Date();
+  const list = entries
+    .filter(e => (e.name + ' ' + e.race).toLowerCase().includes(q))
+    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  const tbody = $('rows');
+  tbody.innerHTML = '';
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No entries yet. Add the first race!</td></tr>';
+    return;
+  }
+  for (const e of list) {
+    const tr = document.createElement('tr');
+    if (new Date(e.date + 'T' + e.time) < now) tr.className = 'past';
+    const cells = [['Name', e.name], ['Race', e.race],
+      ['Date', new Date(e.date + 'T00:00').toLocaleDateString(undefined, {weekday:'short', day:'numeric', month:'short', year:'numeric'})],
+      ['Time', e.time]];
+    for (const [label, val] of cells) {
+      const td = document.createElement('td');
+      td.dataset.label = label;
+      td.textContent = val;
+      tr.appendChild(td);
+    }
+    const td = document.createElement('td');
+    const btn = document.createElement('button');
+    btn.className = 'del'; btn.textContent = '✕'; btn.title = 'Delete';
+    btn.onclick = () => { if (configured && confirm('Delete this entry?')) deleteDoc(doc(col, e.id)); };
+    td.appendChild(btn); tr.appendChild(td);
+    tbody.appendChild(tr);
+  }
+}
+
+$('form').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  if (!configured) return alert('Firebase is not configured yet.');
+  await addDoc(col, { name: $('name').value.trim(), race: $('race').value.trim(),
+    date: $('date').value, time: $('time').value });
+  $('name').value = ''; $('name').focus();
+});
+$('search').addEventListener('input', render);
+render();
+</script>
+</body>
+</html>
