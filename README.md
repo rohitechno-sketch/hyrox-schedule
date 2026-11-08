@@ -22,7 +22,22 @@
 4. **Project settings → Your apps → Web (`</>`)** → register app, copy the `firebaseConfig`
    values into `index.html`.
 
-## 2. Host on GitHub Pages
-1. Create a GitHub repo and push `index.html`.
-2. Repo **Settings → Pages → Deploy from branch → main / root**.
-3. Share the `https://<user>.github.io/<repo>/` link.
+## 2. Host on Firebase Hosting
+The site is a static single-page app served directly from the repository root; no build step is needed.
+
+1. Install Node.js, then install and log in to the Firebase CLI:
+   ```sh
+   npm install -g firebase-tools
+   firebase login
+   ```
+2. From the repository root, select the existing Firebase project. This creates a local `.firebaserc`:
+   ```sh
+   firebase use --add
+   ```
+   Choose the project associated with this app (its project ID may differ from its display name).
+3. Deploy the site:
+   ```sh
+   firebase deploy --only hosting
+   ```
+
+The repository's `firebase.json` configures Hosting to serve `index.html` from the root. Firebase will provide the site URLs after deployment, typically `PROJECT_ID.web.app` and `PROJECT_ID.firebaseapp.com`.
